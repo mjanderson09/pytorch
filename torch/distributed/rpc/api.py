@@ -216,7 +216,8 @@ def _all_gather(obj, worker_names=None, timeout=UNSET_RPC_TIMEOUT):
 
     with _all_gather_dict_lock:
         states = _all_gather_sequence_id_to_states[sequence_id]
-    states.proceed_signal.wait()
+    timeout = timeout if timeout else None
+    states.proceed_signal.wait(timeout=timeout)
 
     # Phase 2: Leader broadcast gathered results to all followers
     # Leader's signal is the first to be unblocked, after receiving all
@@ -343,7 +344,7 @@ def shutdown(graceful=True, timeout=DEFAULT_SHUTDOWN_TIMEOUT):
             if not isinstance(agent, TensorPipeAgent) or agent.is_static_group:
                 _wait_all_workers(timeout)
                 _delete_all_user_and_unforked_owner_rrefs()
-                agent.join(shutdown=True)
+                agent.join(shutdown=True, timeout=timeout)
             else:
                 # This is a dynamic group so we need to grab the token for the operation
                 my_worker_info = agent.get_worker_info()
@@ -353,7 +354,7 @@ def shutdown(graceful=True, timeout=DEFAULT_SHUTDOWN_TIMEOUT):
                     for worker in all_worker_infos:
                         if worker.name != my_name:
                             rpc_sync(worker.name, _update_group_membership, args=(my_worker_info, [], {}, False))
-                    agent.join(shutdown=True)
+                    agent.join(shutdown=True, timeout=timeout)
         finally:
             # In case of errors, continue to complete the local shutdown.
             _finalize_shutdown()
